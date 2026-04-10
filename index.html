@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Survival Brick Breaker - Gugudan Stage</title>
+    <style>
+        /* 폰트 적용 */
+        @font-face {
+            font-family: 'NexonGothic';
+            src: url('NexonLv2Gothic_2.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --accent-color: #38bdf8;
+            --danger-color: #ef4444;
+            --success-color: #10b981;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'NexonGothic', 'Pretendard', sans-serif;
+            transition: background-color 0.5s ease;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify(content): center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: var(--text-color);
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .stat-item {
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hidden { display: none !important; }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            background: var(--accent-color);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            font-family: 'NexonGothic', sans-serif;
+            transition: transform 0.1s;
+        }
+
+        .btn:active { transform: scale(0.95); }
+
+        .paddle-option {
+            display: inline-block;
+            width: 80px;
+            height: 40px;
+            margin: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 3px solid transparent;
+        }
+        .paddle-option.selected { border-color: white; }
+
+        #quiz-timer-box {
+            font-size: 2rem;
+            color: var(--danger-color);
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        #quiz-question { font-size: 2.5rem; margin-bottom: 30px; }
+        .quiz-options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+        .emoji { font-size: 4rem; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-layer">
+            <div class="stat-item">단계: <span id="stage-display">1</span> / 8</div>
+            <div class="stat-item">점수: <span id="score-display">0</span></div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="start-overlay" class="overlay">
+            <div class="emoji">🎮</div>
+            <h1>패들을 선택하세요!</h1>
+            <div>
+                <div class="paddle-option" style="background:#38bdf8;" onclick="selectPaddle('blue')"></div>
+                <div class="paddle-option" style="background:#f472b6;" onclick="selectPaddle('pink')"></div>
+                <div class="paddle-option" style="background:#facc15;" onclick="selectPaddle('yellow')"></div>
+            </div>
+            <p>좌우로 움직여서 벽돌을 깨세요!</p>
+            <button class="btn" onclick="startGame()">게임 시작</button>
+        </div>
+
+        <div id="quiz-overlay" class="overlay hidden">
+            <div id="quiz-timer-box">10</div>
+            <div id="quiz-question">2 X 3 = ?</div>
+            <div class="quiz-options" id="quiz-options"></div>
+        </div>
+
+        <div id="result-overlay" class="overlay hidden">
+            <div id="result-emoji" class="emoji">🎉</div>
+            <h1 id="result-title">축하합니다!</h1>
+            <p id="result-msg">1단계를 통과했습니다!</p>
+            <button id="result-btn" class="btn" onclick="handleResultBtn()">다음 단계로</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const stageDisplay = document.getElementById('stage-display');
+        
+        const startOverlay = document.getElementById('start-overlay');
+        const quizOverlay = document.getElementById('quiz-overlay');
+        const resultOverlay = document.getElementById('result-overlay');
+        const quizTimerBox = document.getElementById('quiz-timer-box');
+        
+        let score = 0;
+        let currentStage = 1;
+        let isGameOver = false;
+        let isPaused = false;
+        let lastTime = 0;
+        let quizTimeRemaining = 10;
+        let quizInterval;
+
+        // 단계별 테마 설정
+        const stageThemes = [
+            { bg: '#0f172a', brickStart: '#f472b6', brickEnd: '#be185d', accent: '#38bdf8' }, // 1단계 (2단)
+            { bg: '#064e3b', brickStart: '#fbbf24', brickEnd: '#d97706', accent: '#34d399' }, // 2단계 (3단) - 숲 테마
+            { bg: '#450a0a', brickStart: '#fb923c', brickEnd: '#ea580c', accent: '#f87171' }, // 3단계 (4단) - 화산 테마
+            { bg: '#2e1065', brickStart: '#22d3ee', brickEnd: '#0891b2', accent: '#a78bfa' }, // 4단계 (5단) - 네온 테마
+            { bg: '#422006', brickStart: '#fde047', brickEnd: '#ca8a04', accent: '#fbbf24' }, // 5단계 (6단) - 사막 테마
+            { bg: '#0c4a6e', brickStart: '#38bdf8', brickEnd: '#0284c7', accent: '#7dd3fc' }, // 6단계 (7단) - 심해 테마
+            { bg: '#111827', brickStart: '#f3f4f6', brickEnd: '#9ca3af', accent: '#6b7280' }, // 7단계 (8단) - 우주 테마
+            { bg: '#000000', brickStart: '#ef4444', brickEnd: '#7f1d1d', accent: '#dc2626' }  // 8단계 (9단) - 최종 보스
+        ];
+
+        const paddle = {
+            width: 120,
+            height: 20,
+            x: 0,
+            y: 0,
+            color: '#38bdf8',
+            type: 'blue'
+        };
+
+        const ball = {
+            x: 0,
+            y: 0,
+            radius: 8,
+            dx: 0,
+            dy: 0,
+            speed: 7.8,
+            color: '#ffffff'
+        };
+
+        let bricks = [];
+        const brickConfig = {
+            rows: 4,
+            cols: 8,
+            padding: 8,
+            offsetTop: 70,
+            height: 35
+        };
+
+        function applyTheme() {
+            const theme = stageThemes[currentStage - 1];
+            document.documentElement.style.setProperty('--bg-color', theme.bg);
+            document.documentElement.style.setProperty('--accent-color', theme.accent);
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initBricks();
+            initPositions();
+        }
+
+        window.addEventListener('resize', resize);
+
+        function selectPaddle(type) {
+            paddle.type = type;
+            paddle.color = type === 'blue' ? '#38bdf8' : (type === 'pink' ? '#f472b6' : '#facc15');
+            document.querySelectorAll('.paddle-option').forEach(el => el.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function initBricks() {
+            const totalPadding = brickConfig.padding * (brickConfig.cols + 1);
+            brickConfig.width = (canvas.width - totalPadding) / brickConfig.cols;
+
+            bricks = [];
+            const dan = currentStage + 1;
+            let quizPool = [];
+            for(let i=1; i<=9; i++) {
+                quizPool.push({ q: `${dan} X ${i} = ?`, a: dan * i });
+            }
+            quizPool.sort(() => Math.random() - 0.5);
+
+            let quizCount = 0;
+            for (let r = 0; r < brickConfig.rows; r++) {
+                bricks[r] = [];
+                for (let c = 0; c < brickConfig.cols; c++) {
+                    let hasQuiz = false;
+                    let quizData = null;
+                    if (quizCount < 9 && Math.random() < 0.35) {
+                        hasQuiz = true;
+                        quizData = quizPool[quizCount++];
+                    }
+                    bricks[r][c] = { status: 1, hasQuiz: hasQuiz, quiz: quizData };
+                }
+            }
+        }
+
+        function initPositions() {
+            paddle.x = (canvas.width - paddle.width) / 2;
+            paddle.y = canvas.height - 100;
+            ball.x = canvas.width / 2;
+            ball.y = paddle.y - 15;
+            ball.dx = ball.speed * (Math.random() > 0.5 ? 1 : -1);
+            ball.dy = -ball.speed;
+        }
+
+        function movePaddle(e) {
+            if (isPaused || isGameOver) return;
+            let relativeX = (e.type.includes('touch')) ? e.touches[0].clientX : e.clientX;
+            paddle.x = Math.max(0, Math.min(canvas.width - paddle.width, relativeX - paddle.width / 2));
+        }
+
+        document.addEventListener('mousemove', movePaddle);
+        document.addEventListener('touchmove', movePaddle, { passive: false });
+
+        function startGame() {
+            startOverlay.classList.add('hidden');
+            resetGameState();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGameState() {
+            isGameOver = false;
+            isPaused = false;
+            score = 0;
+            currentStage = 1;
+            scoreDisplay.textContent = '0';
+            stageDisplay.textContent = '1';
+            applyTheme();
+            resize();
+        }
+
+        function triggerQuiz(quizData, brick) {
+            isPaused = true;
+            quizOverlay.classList.remove('hidden');
+            document.getElementById('quiz-question').textContent = quizData.q;
+            
+            const options = [quizData.a];
+            while(options.length < 3) {
+                let wrong = quizData.a + Math.floor(Math.random() * 10) - 5;
+                if (wrong > 0 && !options.includes(wrong)) options.push(wrong);
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            const optionsContainer = document.getElementById('quiz-options');
+            optionsContainer.innerHTML = '';
+            options.forEach(opt => {
+                const b = document.createElement('button');
+                b.className = 'btn';
+                b.textContent = opt;
+                b.onclick = () => checkQuizAnswer(opt, quizData.a);
+                optionsContainer.appendChild(b);
+            });
+
+            quizTimeRemaining = 10;
+            quizTimerBox.textContent = quizTimeRemaining;
+            clearInterval(quizInterval);
+            quizInterval = setInterval(() => {
+                quizTimeRemaining--;
+                quizTimerBox.textContent = quizTimeRemaining;
+                if (quizTimeRemaining <= 0) {
+                    clearInterval(quizInterval);
+                    failQuiz("시간 초과! 아쉽네요 😢");
+                }
+            }, 1000);
+        }
+
+        function checkQuizAnswer(selected, correct) {
+            clearInterval(quizInterval);
+            if (selected === correct) {
+                isPaused = false;
+                quizOverlay.classList.add('hidden');
+            } else {
+                failQuiz("정답이 아니에요! 아쉽네요 😢");
+            }
+        }
+
+        function failQuiz(msg) {
+            isGameOver = true;
+            quizOverlay.classList.add('hidden');
+            showResult("아쉽습니다...", msg, "😢", "다시 시작", () => location.reload());
+        }
+
+        function showResult(title, msg, emoji, btnText, action) {
+            resultOverlay.classList.remove('hidden');
+            document.getElementById('result-title').textContent = title;
+            document.getElementById('result-msg').textContent = msg;
+            document.getElementById('result-emoji').textContent = emoji;
+            const btn = document.getElementById('result-btn');
+            btn.textContent = btnText;
+            btn.onclick = action;
+        }
+
+        function handleResultBtn() {
+            if (currentStage < 8) {
+                currentStage++;
+                stageDisplay.textContent = currentStage;
+                applyTheme();
+                initBricks();
+                initPositions();
+                resultOverlay.classList.add('hidden');
+                isPaused = false;
+            } else {
+                location.reload();
+            }
+        }
+
+        function checkStageClear() {
+            let allBroken = true;
+            for(let r=0; r<brickConfig.rows; r++) {
+                for(let c=0; c<brickConfig.cols; c++) {
+                    if(bricks[r][c].status === 1) allBroken = false;
+                }
+            }
+            if(allBroken && !isPaused) {
+                isPaused = true;
+                if (currentStage === 8) {
+                    showResult("최종 클리어!", "모든 단계를 정복했습니다! 당신은 구구단 마스터! 🎉", "🏆", "처음으로", () => location.reload());
+                } else {
+                    showResult("스테이지 클리어!", `${currentStage}단계를 통과했고 축하한다! 🎉`, "👏", "다음 단계로", handleResultBtn);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const theme = stageThemes[currentStage - 1];
+
+            for (let r = 0; r < brickConfig.rows; r++) {
+                for (let c = 0; c < brickConfig.cols; c++) {
+                    const b = bricks[r][c];
+                    if (b.status === 1) {
+                        const bx = c * (brickConfig.width + brickConfig.padding) + brickConfig.padding;
+                        const by = r * (brickConfig.height + brickConfig.padding) + brickConfig.offsetTop;
+                        
+                        const grad = ctx.createLinearGradient(bx, by, bx, by + brickConfig.height);
+                        if (b.hasQuiz) {
+                            grad.addColorStop(0, '#fbbf24');
+                            grad.addColorStop(1, '#d97706');
+                        } else {
+                            grad.addColorStop(0, theme.brickStart);
+                            grad.addColorStop(1, theme.brickEnd);
+                        }
+
+                        ctx.beginPath();
+                        ctx.roundRect(bx, by, brickConfig.width, brickConfig.height, 4);
+                        ctx.fillStyle = grad;
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                        ctx.stroke();
+                        ctx.closePath();
+
+                        if(b.hasQuiz) {
+                            ctx.fillStyle = "white";
+                            ctx.font = "bold 16px NexonGothic";
+                            ctx.textAlign = "center";
+                            ctx.fillText("?", bx + brickConfig.width/2, by + brickConfig.height/1.6);
+                        }
+                    }
+                }
+            }
+
+            ctx.beginPath();
+            ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 10);
+            ctx.fillStyle = paddle.color;
+            ctx.fill();
+            ctx.closePath();
+
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(paddle.x + 30, paddle.y + 8, 4, 0, Math.PI*2);
+            ctx.arc(paddle.x + paddle.width - 30, paddle.y + 8, 4, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(paddle.x + 30, paddle.y + 8, 2, 0, Math.PI*2);
+            ctx.arc(paddle.x + paddle.width - 30, paddle.y + 8, 2, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function update() {
+            if (isGameOver || isPaused) return;
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) ball.dx = -ball.dx;
+            if (ball.y - ball.radius < 0) ball.dy = -ball.dy;
+
+            if (ball.y + ball.radius > canvas.height) {
+                isGameOver = true;
+                showResult("게임 종료", "공을 놓쳤습니다! 다시 도전해보세요.", "😢", "다시 시작", () => location.reload());
+                return;
+            }
+
+            if (ball.y + ball.radius > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
+                let hitPoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                ball.dx = hitPoint * ball.speed;
+                ball.dy = -Math.abs(ball.dy);
+            }
+
+            for (let r = 0; r < brickConfig.rows; r++) {
+                for (let c = 0; c < brickConfig.cols; c++) {
+                    const b = bricks[r][c];
+                    if (b.status === 1) {
+                        const bx = c * (brickConfig.width + brickConfig.padding) + brickConfig.padding;
+                        const by = r * (brickConfig.height + brickConfig.padding) + brickConfig.offsetTop;
+
+                        if (ball.x > bx && ball.x < bx + brickConfig.width && ball.y > by && ball.y < by + brickConfig.height) {
+                            ball.dy = -ball.dy;
+                            b.status = 0;
+                            score += 10;
+                            scoreDisplay.textContent = score;
+                            
+                            if (b.hasQuiz) {
+                                triggerQuiz(b.quiz, b);
+                            }
+                            checkStageClear();
+                        }
+                    }
+                }
+            }
+        }
+
+        function gameLoop(timestamp) {
+            update();
+            draw();
+            if (!isGameOver) requestAnimationFrame(gameLoop);
+        }
+
+        selectPaddle('blue');
+        resize();
+
+    </script>
+</body>
+</html>
