@@ -120,7 +120,7 @@
             grid-template-columns: repeat(4, 1fr);
             justify-content: center;
             gap: 6px;
-            margin-top: 15px;
+            margin-top: 10px; /* 세로 폭 30% 축소 */
             max-width: 320px;
         }
         
@@ -154,8 +154,8 @@
 </head>
 <body>
 
-    <!-- 확실하게 재생되는 경쾌한 무료 배경음악 링크로 교체 -->
-    <audio id="bgm" loop src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+    <!-- 확실하게 재생되는 경쾌하고 게임스러운 8비트 무료 배경음악 링크로 교체 -->
+    <audio id="bgm" loop src="https://cdn.pixabay.com/audio/2021/08/04/audio_0625c1539c.mp3"></audio>
 
     <div id="game-container">
         <div id="ui-layer">
@@ -169,15 +169,15 @@
             <div class="emoji">🎮</div>
             <h1>아이니와 벽돌 깨기</h1>
             <div>
-                <!-- 캐릭터를 군인, 헐크, 건설인부로 변경 -->
+                <!-- 캐릭터를 실제 군인복 느낌과 힘이 쎄보이는 캐릭터로 변경 -->
                 <div class="paddle-option" onclick="selectPaddle('soldier')">💂‍♂️</div>
-                <div class="paddle-option" onclick="selectPaddle('hulk')">🧟‍♂️</div>
+                <div class="paddle-option" onclick="selectPaddle('hulk')">🦸‍♂️</div>
                 <div class="paddle-option" onclick="selectPaddle('worker')">👷‍♂️</div>
             </div>
             <p>캐릭터를 선택하세요!</p>
             <button class="btn" onclick="startGame(1)">게임 시작</button>
             
-            <p style="margin-top:20px; font-size: 0.9rem; color: #cbd5e1;">바로 단계를 선택해서 시작할 수도 있어요!</p>
+            <p style="margin-top:14px; margin-bottom:5px; font-size: 0.9rem; color: #cbd5e1;">바로 단계를 선택해서 시작할 수도 있어요!</p>
             <div class="stage-btn-container">
                 <button class="stage-btn" onclick="startGame(1)">1단계</button>
                 <button class="stage-btn" onclick="startGame(2)">2단계</button>
@@ -553,7 +553,7 @@
 
             // 변경된 캐릭터 렌더링
             let jobEmoji = '💂‍♂️'; 
-            if(paddle.type === 'hulk') jobEmoji = '🧟‍♂️';
+            if(paddle.type === 'hulk') jobEmoji = '🦸‍♂️';
             if(paddle.type === 'worker') jobEmoji = '👷‍♂️';
 
             const cx = paddle.x + paddle.width / 2;
