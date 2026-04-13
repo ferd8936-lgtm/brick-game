@@ -93,6 +93,11 @@
 
         .btn:active { transform: scale(0.95); }
 
+        .quiz-options .btn {
+            font-size: 2.5rem; /* 문제 숫자 크기와 동일하게 */
+            padding: 10px 20px;
+        }
+
         .paddle-option {
             display: inline-block;
             width: 80px;
@@ -118,6 +123,8 @@
 </head>
 <body>
 
+    <audio id="bgm" loop src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+
     <div id="game-container">
         <div id="ui-layer">
             <div class="stat-item">단계: <span id="stage-display">1</span> / 8</div>
@@ -128,13 +135,13 @@
 
         <div id="start-overlay" class="overlay">
             <div class="emoji">🎮</div>
-            <h1>패들을 선택하세요!</h1>
+            <h1>아이니와 벽돌 깨기</h1>
             <div>
                 <div class="paddle-option" style="background:#38bdf8;" onclick="selectPaddle('blue')"></div>
                 <div class="paddle-option" style="background:#f472b6;" onclick="selectPaddle('pink')"></div>
                 <div class="paddle-option" style="background:#facc15;" onclick="selectPaddle('yellow')"></div>
             </div>
-            <p>좌우로 움직여서 벽돌을 깨세요!</p>
+            <p>캐릭터를 선택하세요!</p>
             <button class="btn" onclick="startGame()">게임 시작</button>
         </div>
 
@@ -146,8 +153,8 @@
 
         <div id="result-overlay" class="overlay hidden">
             <div id="result-emoji" class="emoji">🎉</div>
-            <h1 id="result-title">축하합니다!</h1>
-            <p id="result-msg">1단계를 통과했습니다!</p>
+            <h1 id="result-title">축하해요!</h1>
+            <p id="result-msg">1단계를 통과했어요!</p>
             <button id="result-btn" class="btn" onclick="handleResultBtn()">다음 단계로</button>
         </div>
     </div>
@@ -170,17 +177,22 @@
         let lastTime = 0;
         let quizTimeRemaining = 10;
         let quizInterval;
+        
+        // 추가된 변수들
+        let correctAnswers = 0; // 맞춘 문제 수
+        let bonusItem = { x: 0, y: 0, dy: 4, radius: 15, dropped: false, caught: false };
+        let isPiercing = false;
 
-        // 단계별 테마 설정
+        // 단계별 게임 느낌 배경 테마 설정
         const stageThemes = [
-            { bg: '#0f172a', brickStart: '#f472b6', brickEnd: '#be185d', accent: '#38bdf8' }, // 1단계 (2단)
-            { bg: '#064e3b', brickStart: '#fbbf24', brickEnd: '#d97706', accent: '#34d399' }, // 2단계 (3단) - 숲 테마
-            { bg: '#450a0a', brickStart: '#fb923c', brickEnd: '#ea580c', accent: '#f87171' }, // 3단계 (4단) - 화산 테마
-            { bg: '#2e1065', brickStart: '#22d3ee', brickEnd: '#0891b2', accent: '#a78bfa' }, // 4단계 (5단) - 네온 테마
-            { bg: '#422006', brickStart: '#fde047', brickEnd: '#ca8a04', accent: '#fbbf24' }, // 5단계 (6단) - 사막 테마
-            { bg: '#0c4a6e', brickStart: '#38bdf8', brickEnd: '#0284c7', accent: '#7dd3fc' }, // 6단계 (7단) - 심해 테마
-            { bg: '#111827', brickStart: '#f3f4f6', brickEnd: '#9ca3af', accent: '#6b7280' }, // 7단계 (8단) - 우주 테마
-            { bg: '#000000', brickStart: '#ef4444', brickEnd: '#7f1d1d', accent: '#dc2626' }  // 8단계 (9단) - 최종 보스
+            { bg: 'radial-gradient(circle, #1e293b, #0f172a)', brickStart: '#f472b6', brickEnd: '#be185d', accent: '#38bdf8' }, // 1단계
+            { bg: 'radial-gradient(circle, #065f46, #064e3b)', brickStart: '#fbbf24', brickEnd: '#d97706', accent: '#34d399' }, // 2단계
+            { bg: 'radial-gradient(circle, #7f1d1d, #450a0a)', brickStart: '#fb923c', brickEnd: '#ea580c', accent: '#f87171' }, // 3단계
+            { bg: 'radial-gradient(circle, #4c1d95, #2e1065)', brickStart: '#22d3ee', brickEnd: '#0891b2', accent: '#a78bfa' }, // 4단계
+            { bg: 'radial-gradient(circle, #713f12, #422006)', brickStart: '#fde047', brickEnd: '#ca8a04', accent: '#fbbf24' }, // 5단계
+            { bg: 'radial-gradient(circle, #0369a1, #0c4a6e)', brickStart: '#38bdf8', brickEnd: '#0284c7', accent: '#7dd3fc' }, // 6단계
+            { bg: 'radial-gradient(circle, #374151, #111827)', brickStart: '#f3f4f6', brickEnd: '#9ca3af', accent: '#6b7280' }, // 7단계
+            { bg: 'radial-gradient(circle, #450a0a, #000000)', brickStart: '#ef4444', brickEnd: '#7f1d1d', accent: '#dc2626' }  // 8단계
         ];
 
         const paddle = {
@@ -204,7 +216,7 @@
 
         let bricks = [];
         const brickConfig = {
-            rows: 4,
+            rows: 3, // 행을 3줄로 축소
             cols: 8,
             padding: 8,
             offsetTop: 70,
@@ -213,7 +225,8 @@
 
         function applyTheme() {
             const theme = stageThemes[currentStage - 1];
-            document.documentElement.style.setProperty('--bg-color', theme.bg);
+            document.documentElement.style.setProperty('--bg-color', 'transparent'); 
+            document.body.style.background = theme.bg;
             document.documentElement.style.setProperty('--accent-color', theme.accent);
         }
 
@@ -240,22 +253,30 @@
             bricks = [];
             const dan = currentStage + 1;
             let quizPool = [];
+            // 1~9까지 모두 출제
             for(let i=1; i<=9; i++) {
                 quizPool.push({ q: `${dan} X ${i} = ?`, a: dan * i });
             }
             quizPool.sort(() => Math.random() - 0.5);
 
+            // 구구단 문제와 보너스 아이템의 고정 위치(중복되지 않게 무작위 추첨)
+            let totalBricks = brickConfig.rows * brickConfig.cols;
+            let indices = Array.from({length: totalBricks}, (_, i) => i);
+            indices.sort(() => Math.random() - 0.5);
+            let quizIndices = indices.slice(0, 9); // 정확히 9개는 퀴즈
+            let itemIndex = indices[9]; // 그 다음 1개는 무조건 아이템
+
+            let count = 0;
             let quizCount = 0;
             for (let r = 0; r < brickConfig.rows; r++) {
                 bricks[r] = [];
                 for (let c = 0; c < brickConfig.cols; c++) {
-                    let hasQuiz = false;
-                    let quizData = null;
-                    if (quizCount < 9 && Math.random() < 0.35) {
-                        hasQuiz = true;
-                        quizData = quizPool[quizCount++];
-                    }
-                    bricks[r][c] = { status: 1, hasQuiz: hasQuiz, quiz: quizData };
+                    let hasQuiz = quizIndices.includes(count);
+                    let hasItem = (count === itemIndex);
+                    let quizData = hasQuiz ? quizPool[quizCount++] : null;
+                    
+                    bricks[r][c] = { status: 1, hasQuiz: hasQuiz, quiz: quizData, hasItem: hasItem };
+                    count++;
                 }
             }
         }
@@ -280,6 +301,7 @@
 
         function startGame() {
             startOverlay.classList.add('hidden');
+            document.getElementById('bgm').play().catch(() => {}); // 배경음악 재생
             resetGameState();
             requestAnimationFrame(gameLoop);
         }
@@ -289,6 +311,10 @@
             isPaused = false;
             score = 0;
             currentStage = 1;
+            correctAnswers = 0;
+            bonusItem.dropped = false;
+            bonusItem.caught = false;
+            isPiercing = false;
             scoreDisplay.textContent = '0';
             stageDisplay.textContent = '1';
             applyTheme();
@@ -335,15 +361,21 @@
             if (selected === correct) {
                 isPaused = false;
                 quizOverlay.classList.add('hidden');
+                correctAnswers++;
+                
+                // 9문제를 다 풀면 바로 다음 단계로
+                if (correctAnswers >= 9) {
+                    handleStageClearLogic();
+                }
             } else {
-                failQuiz("정답이 아니에요! 아쉽네요 😢");
+                failQuiz("정답이 아니에요! 아쉬워요 😢");
             }
         }
 
         function failQuiz(msg) {
             isGameOver = true;
             quizOverlay.classList.add('hidden');
-            showResult("아쉽습니다...", msg, "😢", "다시 시작", () => location.reload());
+            showResult("아쉽습니다...", msg, "😢", "다시 해보기", () => location.reload());
         }
 
         function showResult(title, msg, emoji, btnText, action) {
@@ -360,6 +392,10 @@
             if (currentStage < 8) {
                 currentStage++;
                 stageDisplay.textContent = currentStage;
+                correctAnswers = 0;
+                bonusItem.dropped = false;
+                bonusItem.caught = false;
+                isPiercing = false;
                 applyTheme();
                 initBricks();
                 initPositions();
@@ -371,25 +407,25 @@
         }
 
         function checkStageClear() {
-            let allBroken = true;
-            for(let r=0; r<brickConfig.rows; r++) {
-                for(let c=0; c<brickConfig.cols; c++) {
-                    if(bricks[r][c].status === 1) allBroken = false;
-                }
-            }
-            if(allBroken && !isPaused) {
-                isPaused = true;
-                if (currentStage === 8) {
-                    showResult("최종 클리어!", "모든 단계를 정복했습니다! 당신은 구구단 마스터! 🎉", "🏆", "처음으로", () => location.reload());
-                } else {
-                    showResult("스테이지 클리어!", `${currentStage}단계를 통과했고 축하한다! 🎉`, "👏", "다음 단계로", handleResultBtn);
-                }
+            // 더 이상 기존 벽돌 갯수 체크로 클리어하지 않음 (문제 9개 클리어 시 넘어감)
+        }
+        
+        function handleStageClearLogic() {
+            isPaused = true;
+            if (currentStage === 8) {
+                showResult("최종 클리어!", "모든 단계를 정복했어요! 정말 멋진 구구단 마스터네요! 🎉", "🏆", "처음부터 다시하기", () => location.reload());
+            } else {
+                showResult("스테이지 클리어!", `${currentStage}단계를 통과했어요! 아주 잘했어요! 🎉`, "👏", "다음 단계로", handleResultBtn);
             }
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const theme = stageThemes[currentStage - 1];
+
+            // 벽돌 그림자 효과 설정
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
 
             for (let r = 0; r < brickConfig.rows; r++) {
                 for (let c = 0; c < brickConfig.cols; c++) {
@@ -400,29 +436,64 @@
                         
                         const grad = ctx.createLinearGradient(bx, by, bx, by + brickConfig.height);
                         if (b.hasQuiz) {
-                            grad.addColorStop(0, '#fbbf24');
-                            grad.addColorStop(1, '#d97706');
+                            // 문제 블록 차별화 (빛나는 황금색)
+                            grad.addColorStop(0, '#fef08a');
+                            grad.addColorStop(1, '#b45309');
+                            ctx.shadowColor = '#fbbf24';
                         } else {
+                            // 일반 블록 실제 벽돌 느낌
                             grad.addColorStop(0, theme.brickStart);
                             grad.addColorStop(1, theme.brickEnd);
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
                         }
 
                         ctx.beginPath();
                         ctx.roundRect(bx, by, brickConfig.width, brickConfig.height, 4);
                         ctx.fillStyle = grad;
                         ctx.fill();
-                        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                        
+                        // 두꺼운 테두리 반영
+                        if (b.hasQuiz) {
+                            ctx.strokeStyle = '#fef08a';
+                            ctx.lineWidth = 2;
+                        } else {
+                            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                            ctx.lineWidth = 1;
+                        }
                         ctx.stroke();
                         ctx.closePath();
 
                         if(b.hasQuiz) {
+                            ctx.shadowBlur = 0; // 텍스트는 그림자 제거
                             ctx.fillStyle = "white";
-                            ctx.font = "bold 16px NexonGothic";
+                            ctx.font = "bold 20px NexonGothic"; // 텍스트 크기 확대
                             ctx.textAlign = "center";
-                            ctx.fillText("?", bx + brickConfig.width/2, by + brickConfig.height/1.6);
+                            ctx.fillText("?", bx + brickConfig.width/2, by + brickConfig.height/1.5);
+                            ctx.shadowBlur = 8; // 다음 블록을 위해 복구
                         }
                     }
                 }
+            }
+
+            // 그림자 초기화
+            ctx.shadowBlur = 0;
+
+            // 보너스 아이템 그리기 (노란색 빛나는 구슬)
+            if (bonusItem.dropped && !bonusItem.caught) {
+                ctx.beginPath();
+                ctx.arc(bonusItem.x, bonusItem.y, bonusItem.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#fde047';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.closePath();
+            }
+
+            // 관통 보너스 효과 번쩍임
+            if (isPiercing) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#fef08a';
             }
 
             ctx.beginPath();
@@ -430,16 +501,35 @@
             ctx.fillStyle = paddle.color;
             ctx.fill();
             ctx.closePath();
+            
+            ctx.shadowBlur = 0; // 초기화
 
+            // 캐릭터 그리기 (패들을 머리로 받치는 모습)
+            const cx = paddle.x + paddle.width / 2;
+            const cy = paddle.y + paddle.height + 15; // 패들 바로 아래
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, 15, 0, Math.PI*2);
+            ctx.fillStyle = paddle.color;
+            ctx.fill();
+            ctx.closePath();
+            
+            // 귀여운 얼굴
             ctx.fillStyle = "white";
             ctx.beginPath();
-            ctx.arc(paddle.x + 30, paddle.y + 8, 4, 0, Math.PI*2);
-            ctx.arc(paddle.x + paddle.width - 30, paddle.y + 8, 4, 0, Math.PI*2);
+            ctx.arc(cx - 6, cy - 2, 4, 0, Math.PI*2);
+            ctx.arc(cx + 6, cy - 2, 4, 0, Math.PI*2);
             ctx.fill();
             ctx.fillStyle = "black";
             ctx.beginPath();
-            ctx.arc(paddle.x + 30, paddle.y + 8, 2, 0, Math.PI*2);
-            ctx.arc(paddle.x + paddle.width - 30, paddle.y + 8, 2, 0, Math.PI*2);
+            ctx.arc(cx - 6, cy - 2, 2, 0, Math.PI*2);
+            ctx.arc(cx + 6, cy - 2, 2, 0, Math.PI*2);
+            ctx.fill();
+            // 볼터치
+            ctx.fillStyle = "rgba(255, 105, 180, 0.6)";
+            ctx.beginPath();
+            ctx.arc(cx - 10, cy + 4, 3, 0, Math.PI*2);
+            ctx.arc(cx + 10, cy + 4, 3, 0, Math.PI*2);
             ctx.fill();
 
             ctx.beginPath();
@@ -452,6 +542,18 @@
         function update() {
             if (isGameOver || isPaused) return;
 
+            // 보너스 아이템 하강 및 충돌 처리
+            if (bonusItem.dropped && !bonusItem.caught) {
+                bonusItem.y += bonusItem.dy;
+                // 아이템과 패들의 충돌
+                if (bonusItem.y + bonusItem.radius > paddle.y && 
+                    bonusItem.y - bonusItem.radius < paddle.y + paddle.height &&
+                    bonusItem.x > paddle.x && bonusItem.x < paddle.x + paddle.width) {
+                    bonusItem.caught = true;
+                    isPiercing = true; // 무적 관통 획득!
+                }
+            }
+
             ball.x += ball.dx;
             ball.y += ball.dy;
 
@@ -460,13 +562,17 @@
 
             if (ball.y + ball.radius > canvas.height) {
                 isGameOver = true;
-                showResult("게임 종료", "공을 놓쳤습니다! 다시 도전해보세요.", "😢", "다시 시작", () => location.reload());
+                showResult("게임 종료", "공을 놓쳤어요! 다시 도전해볼까요?", "😢", "다시 해보기", () => location.reload());
                 return;
             }
 
             if (ball.y + ball.radius > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
                 let hitPoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
                 ball.dx = hitPoint * ball.speed;
+                // 공이 세로로만 왕복하며 갇히는 버그 개선
+                if (Math.abs(ball.dx) < 1.5) {
+                    ball.dx += (Math.random() > 0.5 ? 1.5 : -1.5);
+                }
                 ball.dy = -Math.abs(ball.dy);
             }
 
@@ -478,15 +584,26 @@
                         const by = r * (brickConfig.height + brickConfig.padding) + brickConfig.offsetTop;
 
                         if (ball.x > bx && ball.x < bx + brickConfig.width && ball.y > by && ball.y < by + brickConfig.height) {
-                            ball.dy = -ball.dy;
+                            
+                            // 관통(피어싱) 상태가 아닐 때만 공이 튕겨나옴
+                            if (!isPiercing) {
+                                ball.dy = -ball.dy;
+                            }
+                            
                             b.status = 0;
                             score += 10;
                             scoreDisplay.textContent = score;
                             
+                            // 부서진 블록에 아이템이 숨겨져 있다면 떨구기
+                            if (b.hasItem) {
+                                bonusItem.dropped = true;
+                                bonusItem.x = bx + brickConfig.width / 2;
+                                bonusItem.y = by + brickConfig.height / 2;
+                            }
+                            
                             if (b.hasQuiz) {
                                 triggerQuiz(b.quiz, b);
                             }
-                            checkStageClear();
                         }
                     }
                 }
