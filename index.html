@@ -114,7 +114,7 @@
         }
         .paddle-option.selected { border-color: var(--accent-color); transform: scale(1.1); }
 
-        /* 단계 선택 버튼 스타일: 가로 2줄(4개씩) 배치 및 30% 축소 */
+        /* 단계 선택 버튼 스타일: 가로 2줄(4개씩) 배치 및 사이즈 확대, 테두리 축소 반영 */
         .stage-btn-container {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -125,15 +125,15 @@
         }
         
         .stage-btn {
-            padding: 5px 8px; /* 30% 축소 반영 */
+            padding: 7px 11px; /* 30% 사이즈 확대 */
             background: #1e293b;
-            border: 2px solid var(--accent-color);
+            border: 1px solid var(--accent-color); /* 테두리 굵기 50% 축소 (기존 2px) */
             color: white;
             border-radius: 6px;
             font-family: 'NexonGothic', sans-serif;
             cursor: pointer;
             font-weight: bold;
-            font-size: 0.65rem; /* 글자 크기 축소 */
+            font-size: 0.85rem; /* 글자 크기 30% 확대 */
         }
         .stage-btn:hover, .stage-btn:active {
             background: var(--accent-color);
@@ -154,7 +154,8 @@
 </head>
 <body>
 
-    <audio id="bgm" loop src="https://assets.mixkit.co/music/preview/mixkit-happy-loop-139.mp3"></audio>
+    <!-- 확실하게 재생되는 경쾌한 무료 배경음악 링크로 교체 -->
+    <audio id="bgm" loop src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
 
     <div id="game-container">
         <div id="ui-layer">
@@ -168,10 +169,10 @@
             <div class="emoji">🎮</div>
             <h1>아이니와 벽돌 깨기</h1>
             <div>
-                <!-- 캐릭터를 직업군(의사, 판사, 변호사)으로 변경 -->
-                <div class="paddle-option" onclick="selectPaddle('doctor')">👨‍⚕️</div>
-                <div class="paddle-option" onclick="selectPaddle('judge')">👨‍⚖️</div>
-                <div class="paddle-option" onclick="selectPaddle('lawyer')">🧑‍💼</div>
+                <!-- 캐릭터를 군인, 헐크, 건설인부로 변경 -->
+                <div class="paddle-option" onclick="selectPaddle('soldier')">💂‍♂️</div>
+                <div class="paddle-option" onclick="selectPaddle('hulk')">🧟‍♂️</div>
+                <div class="paddle-option" onclick="selectPaddle('worker')">👷‍♂️</div>
             </div>
             <p>캐릭터를 선택하세요!</p>
             <button class="btn" onclick="startGame(1)">게임 시작</button>
@@ -246,7 +247,7 @@
             x: 0,
             y: 0,
             color: '#94a3b8', 
-            type: 'doctor' // 기본값 변경
+            type: 'soldier' // 기본값 변경
         };
 
         const ball = {
@@ -342,7 +343,12 @@
         function startGame(selectedStage) {
             if (selectedStage) currentStage = selectedStage;
             startOverlay.classList.add('hidden');
-            document.getElementById('bgm').play().catch(() => {}); 
+            
+            // 재생 버그를 막기 위해 currentTime을 0으로 리셋 후 play
+            const bgm = document.getElementById('bgm');
+            bgm.currentTime = 0;
+            bgm.play().catch(() => {}); 
+            
             resetGameState();
             requestAnimationFrame(gameLoop);
         }
@@ -513,15 +519,23 @@
 
             ctx.shadowBlur = 0;
 
+            // 보너스 아이템 그리기 (반짝반짝 애니메이션 적용)
             if (bonusItem.dropped && !bonusItem.caught) {
+                const pulse = Math.abs(Math.sin(Date.now() / 150)); // 빛나는 애니메이션 효과
+                
+                ctx.shadowBlur = 15 + (pulse * 20); // 번쩍이는 빛
+                ctx.shadowColor = '#fef08a';
+
                 ctx.beginPath();
-                ctx.arc(bonusItem.x, bonusItem.y, bonusItem.radius, 0, Math.PI * 2);
+                ctx.arc(bonusItem.x, bonusItem.y, bonusItem.radius + (pulse * 3), 0, Math.PI * 2); // 크기도 약간 펄스
                 ctx.fillStyle = '#fde047';
                 ctx.fill();
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2 + (pulse * 2);
                 ctx.stroke();
                 ctx.closePath();
+                
+                ctx.shadowBlur = 0; // 되돌리기
             }
 
             if (isPiercing) {
@@ -537,13 +551,13 @@
             
             ctx.shadowBlur = 0; 
 
-            // 선택한 직업 캐릭터 이모티콘 렌더링
-            let jobEmoji = '👨‍⚕️'; 
-            if(paddle.type === 'judge') jobEmoji = '👨‍⚖️';
-            if(paddle.type === 'lawyer') jobEmoji = '🧑‍💼';
+            // 변경된 캐릭터 렌더링
+            let jobEmoji = '💂‍♂️'; 
+            if(paddle.type === 'hulk') jobEmoji = '🧟‍♂️';
+            if(paddle.type === 'worker') jobEmoji = '👷‍♂️';
 
             const cx = paddle.x + paddle.width / 2;
-            const cy = paddle.y + paddle.height + 25; // 패들 아래 위치 조정
+            const cy = paddle.y + paddle.height + 25; 
             
             ctx.font = "30px Arial";
             ctx.textAlign = "center";
@@ -628,7 +642,7 @@
             if (!isGameOver) requestAnimationFrame(gameLoop);
         }
 
-        selectPaddle('doctor'); 
+        selectPaddle('soldier'); 
         resize();
 
     </script>
