@@ -215,13 +215,12 @@
         const resultOverlay = document.getElementById('result-overlay');
         const quizTimerBox = document.getElementById('quiz-timer-box');
         
-        let score = 0;
-        let currentStage = 1;
-        let isGameOver = false;
-        let isPaused = false;
+        
         let lastTime = 0;
+        let lastFrameTime = 0;
         let quizTimeRemaining = 10;
         let quizInterval;
+
         
         let correctAnswers = 0; 
         let bonusItem = { x: 0, y: 0, dy: 4, radius: 15, dropped: false, caught: false };
@@ -349,8 +348,11 @@
             bgm.currentTime = 0;
             bgm.play().catch(() => {}); 
             
+            
             resetGameState();
+            lastFrameTime = performance.now();
             requestAnimationFrame(gameLoop);
+
         }
 
         function resetGameState() {
@@ -584,11 +586,28 @@
                 }
             }
 
-            ball.x += ball.dx;
-            ball.y += ball.dy;
+            
+            const deltaTime = Math.min(32, Math.max(0, performance.now() - lastFrameTime)) / 16.667;
+            lastFrameTime = performance.now();
 
-            if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) ball.dx = -ball.dx;
-            if (ball.y - ball.radius < 0) ball.dy = -ball.dy;
+            ball.x += ball.dx * deltaTime;
+            ball.y += ball.dy * deltaTime;
+
+
+            
+            if (ball.x + ball.radius >= canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                ball.dx = -Math.abs(ball.dx);
+            } else if (ball.x - ball.radius <= 0) {
+                ball.x = ball.radius;
+                ball.dx = Math.abs(ball.dx);
+            }
+
+            if (ball.y - ball.radius <= 0) {
+                ball.y = ball.radius;
+                ball.dy = Math.abs(ball.dy);
+            }
+
 
             if (ball.y + ball.radius > canvas.height) {
                 isGameOver = true;
@@ -596,18 +615,35 @@
                 return;
             }
 
-            if (ball.y + ball.radius > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
-                let hitPoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+            
+            if (
+                ball.dy > 0 &&
+                ball.y + ball.radius >= paddle.y &&
+                ball.y - ball.radius < paddle.y + paddle.height &&
+                ball.x + ball.radius > paddle.x &&
+                ball.x - ball.radius < paddle.x + paddle.width
+            ) {
+                const hitPoint = Math.max(
+                    -0.85,
+                    Math.min(
+                        0.85,
+                        (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2)
+                    )
+                );
+
                 ball.dx = hitPoint * ball.speed;
-                if (Math.abs(ball.dx) < 1.5) {
-                    ball.dx += (Math.random() > 0.5 ? 1.5 : -1.5);
-                }
-                ball.dy = -Math.abs(ball.dy);
+                ball.dy = -Math.sqrt(
+                    ball.speed * ball.speed - ball.dx * ball.dx
+                );
+
+                ball.y = paddle.y - ball.radius;
+
                 if (isPiercing) {
                     piercingBounces--;
                     if (piercingBounces <= 0) isPiercing = false;
                 }
             }
+
 
             for (let r = 0; r < brickConfig.rows; r++) {
                 for (let c = 0; c < brickConfig.cols; c++) {
